@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IntegrationConfig } from '../types';
+import { integrationService } from '../services/integrationService';
 
 interface SettingsModalProps {
   onSaveKey: (key: string) => void;
@@ -25,6 +26,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     notionDatabaseId: ''
   });
 
+  const [ankiStatus, setAnkiStatus] = useState<{msg: string, type: 'success' | 'error' | 'neutral'}>({ msg: '', type: 'neutral' });
+
   useEffect(() => {
     setIntegrations(initialIntegrations);
   }, [initialIntegrations]);
@@ -33,6 +36,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     if (apiKey) onSaveKey(apiKey);
     onSaveIntegrations(integrations);
     onClose();
+  };
+
+  const handleTestAnki = async () => {
+    setAnkiStatus({ msg: 'Testing...', type: 'neutral' });
+    const result = await integrationService.checkAnkiConnection();
+    if (result.success) {
+      setAnkiStatus({ msg: `Success! Connected to AnkiConnect v${result.version}`, type: 'success' });
+    } else {
+      setAnkiStatus({ msg: 'Failed. Is Anki open & Configured?', type: 'error' });
+    }
   };
 
   return (
@@ -74,35 +87,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === 'integrations' && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
               <label className="block text-[10px] font-mono text-cyber-green mb-1">ANKI_DECK_NAME</label>
-              <input
-                type="text"
-                value={integrations.ankiDeckName}
-                onChange={(e) => setIntegrations({...integrations, ankiDeckName: e.target.value})}
-                className="w-full bg-black border border-cyber-gray text-white p-2 text-xs rounded focus:border-cyber-green focus:outline-none font-mono"
-              />
-              <p className="text-[9px] text-gray-500 mt-1">Requires AnkiConnect add-on running on localhost:8765</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={integrations.ankiDeckName}
+                  onChange={(e) => setIntegrations({...integrations, ankiDeckName: e.target.value})}
+                  className="flex-1 bg-black border border-cyber-gray text-white p-2 text-xs rounded focus:border-cyber-green focus:outline-none font-mono"
+                />
+                <button 
+                  onClick={handleTestAnki}
+                  className="bg-cyber-gray border border-gray-600 text-white text-[10px] px-2 rounded hover:bg-gray-700"
+                >
+                  TEST
+                </button>
+              </div>
+              <p className={`text-[9px] mt-1 ${ankiStatus.type === 'error' ? 'text-red-500' : ankiStatus.type === 'success' ? 'text-cyber-green' : 'text-gray-500'}`}>
+                {ankiStatus.msg || "Requires AnkiConnect add-on running on localhost:8765"}
+              </p>
             </div>
-            <div>
-              <label className="block text-[10px] font-mono text-cyber-green mb-1">NOTION_TOKEN</label>
-              <input
-                type="password"
-                value={integrations.notionToken}
-                onChange={(e) => setIntegrations({...integrations, notionToken: e.target.value})}
-                className="w-full bg-black border border-cyber-gray text-white p-2 text-xs rounded focus:border-cyber-green focus:outline-none font-mono"
-                placeholder="secret_..."
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-cyber-green mb-1">NOTION_DB_ID</label>
-              <input
-                type="text"
-                value={integrations.notionDatabaseId}
-                onChange={(e) => setIntegrations({...integrations, notionDatabaseId: e.target.value})}
-                className="w-full bg-black border border-cyber-gray text-white p-2 text-xs rounded focus:border-cyber-green focus:outline-none font-mono"
-              />
+            
+            <div className="border-t border-cyber-gray pt-2">
+               <div className="mb-2">
+                <label className="block text-[10px] font-mono text-cyber-green mb-1">NOTION_TOKEN</label>
+                <input
+                  type="password"
+                  value={integrations.notionToken}
+                  onChange={(e) => setIntegrations({...integrations, notionToken: e.target.value})}
+                  className="w-full bg-black border border-cyber-gray text-white p-2 text-xs rounded focus:border-cyber-green focus:outline-none font-mono"
+                  placeholder="secret_..."
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono text-cyber-green mb-1">NOTION_DB_ID</label>
+                <input
+                  type="text"
+                  value={integrations.notionDatabaseId}
+                  onChange={(e) => setIntegrations({...integrations, notionDatabaseId: e.target.value})}
+                  className="w-full bg-black border border-cyber-gray text-white p-2 text-xs rounded focus:border-cyber-green focus:outline-none font-mono"
+                />
+              </div>
             </div>
           </div>
         )}

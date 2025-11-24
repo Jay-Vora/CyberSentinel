@@ -69,8 +69,32 @@ const markdownToNotionBlocks = (text: string) => {
 };
 
 export const integrationService = {
+  async checkAnkiConnection() {
+    try {
+      const response = await fetch('http://127.0.0.1:8765', {
+        method: 'POST',
+        body: JSON.stringify({ action: "version", version: 6 })
+      });
+      const data = await response.json();
+      return { success: true, version: data.result };
+    } catch (error) {
+       console.error("Anki Test Error:", error);
+       return { success: false, error: error };
+    }
+  },
+
   async syncToAnki(config: IntegrationConfig, cards: { front: string; back: string; tags: string[] }[]) {
     if (!config.ankiDeckName) throw new Error("Anki Deck Name not configured.");
+
+    // First check if deck exists, if not create it (optional, but good UX)
+    try {
+      await fetch('http://127.0.0.1:8765', {
+        method: 'POST',
+        body: JSON.stringify({ action: "createDeck", version: 6, params: { deck: config.ankiDeckName } })
+      });
+    } catch (e) {
+      // Ignore create deck error, might already exist or connection failed (handled below)
+    }
 
     const results = [];
     for (const card of cards) {
@@ -95,12 +119,19 @@ export const integrationService = {
           method: 'POST',
           body: JSON.stringify(payload)
         });
+        
         const data = await response.json();
-        if (data.error) throw new Error(data.error);
+        
+        if (data.error) {
+           throw new Error(`Anki Error: ${data.error}`);
+        }
         results.push(data);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Anki Sync Error:", error);
-        throw new Error("Failed to connect to Anki. Is AnkiConnect installed and Anki running?");
+        if (error.message && error.message.includes("Failed to fetch")) {
+          throw new Error("Connection Refused. Ensure Anki is OPEN and AnkiConnect 'webCorsOriginList' includes '*'.");
+        }
+        throw error;
       }
     }
     return results.length;
