@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageRole, ChatMessage } from './types';
+import { MessageRole, ChatMessage, IntegrationConfig } from './types';
 import { geminiService } from './services/geminiService';
 import { WELCOME_MESSAGE } from './constants';
 import ChatBubble from './components/ChatBubble';
@@ -8,6 +8,11 @@ import SettingsModal from './components/SettingsModal';
 
 const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [integrationConfig, setIntegrationConfig] = useState<IntegrationConfig>({
+    ankiDeckName: 'CyberSentinel',
+    notionToken: '',
+    notionDatabaseId: ''
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,12 +22,19 @@ const App: React.FC = () => {
 
   // Initialize App (Load local storage)
   useEffect(() => {
+    // Load API Key
     const storedKey = localStorage.getItem('cybersentinel_api_key');
     if (storedKey) {
       setApiKey(storedKey);
       geminiService.initialize(storedKey);
     } else {
       setShowSettings(true);
+    }
+
+    // Load Integrations
+    const storedIntegrations = localStorage.getItem('cybersentinel_integrations');
+    if (storedIntegrations) {
+      setIntegrationConfig(JSON.parse(storedIntegrations));
     }
 
     // Streak Logic
@@ -69,7 +81,11 @@ const App: React.FC = () => {
     localStorage.setItem('cybersentinel_api_key', key);
     setApiKey(key);
     geminiService.initialize(key);
-    setShowSettings(false);
+  };
+
+  const handleSaveIntegrations = (config: IntegrationConfig) => {
+    localStorage.setItem('cybersentinel_integrations', JSON.stringify(config));
+    setIntegrationConfig(config);
   };
 
   const handleSendMessage = async (text: string) => {
@@ -134,7 +150,11 @@ const App: React.FC = () => {
         {/* Chat Area */}
         <main className="flex-1 overflow-y-auto p-4 scrollbar-thin">
           {messages.map((msg) => (
-            <ChatBubble key={msg.id} message={msg} />
+            <ChatBubble 
+              key={msg.id} 
+              message={msg} 
+              integrationConfig={integrationConfig}
+            />
           ))}
           {isLoading && (
             <div className="flex justify-start mb-4">
@@ -154,9 +174,11 @@ const App: React.FC = () => {
         {/* Settings Modal */}
         {showSettings && (
           <SettingsModal 
-            onSave={handleSaveKey} 
+            onSaveKey={handleSaveKey}
+            onSaveIntegrations={handleSaveIntegrations}
             onClose={() => setShowSettings(false)}
-            hasKey={!!apiKey} 
+            hasKey={!!apiKey}
+            initialIntegrations={integrationConfig}
           />
         )}
       </div>

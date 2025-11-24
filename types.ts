@@ -17,6 +17,12 @@ export interface UserState {
   lastVisit: string; // YYYY-MM-DD
 }
 
+export interface IntegrationConfig {
+  ankiDeckName: string;
+  notionToken: string;
+  notionDatabaseId: string;
+}
+
 export enum AppMode {
   CHAT = 'CHAT',
   SETTINGS = 'SETTINGS'

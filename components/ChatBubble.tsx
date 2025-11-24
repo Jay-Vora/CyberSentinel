@@ -1,22 +1,53 @@
-import React from 'react';
-import { MessageRole, ChatMessage } from '../types';
+import React, { useState } from 'react';
+import { MessageRole, ChatMessage, IntegrationConfig } from '../types';
+import { parseAnkiCards, integrationService } from '../services/integrationService';
 
 interface ChatBubbleProps {
   message: ChatMessage;
+  integrationConfig?: IntegrationConfig;
 }
 
-const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
+const ChatBubble: React.FC<ChatBubbleProps> = ({ message, integrationConfig }) => {
   const isUser = message.role === MessageRole.USER;
   const isSystem = message.role === MessageRole.SYSTEM;
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
-  // Simple formatter to handle code blocks and bold text for better readability
-  // without a heavy markdown library, preserving the "raw" terminal feel.
+  // Detect content types
+  const ankiCards = !isUser ? parseAnkiCards(message.text) : [];
+  // Simple heuristic for Notion notes: looks for Markdown Header level 3 used in Prompt
+  const isNotionNote = !isUser && message.text.includes("### ") && message.text.includes("**Key Concepts:**");
+
+  const handleSyncAnki = async () => {
+    if (!integrationConfig) return;
+    setSyncStatus("Syncing Anki...");
+    try {
+      const count = await integrationService.syncToAnki(integrationConfig, ankiCards);
+      setSyncStatus(`Synced ${count} cards!`);
+    } catch (e: any) {
+      setSyncStatus(`Error: ${e.message}`);
+    }
+    setTimeout(() => setSyncStatus(null), 3000);
+  };
+
+  const handleSyncNotion = async () => {
+    if (!integrationConfig) return;
+    setSyncStatus("Syncing Notion...");
+    try {
+      // Extract title from first ### header
+      const titleMatch = message.text.match(/### (.*)/);
+      const title = titleMatch ? titleMatch[1] : "CyberSentinel Note";
+      await integrationService.syncToNotion(integrationConfig, title, message.text);
+      setSyncStatus("Synced to Notion!");
+    } catch (e: any) {
+      setSyncStatus(`Error: ${e.message}`);
+    }
+    setTimeout(() => setSyncStatus(null), 3000);
+  };
+
   const formatText = (text: string) => {
     const parts = text.split(/(```[\s\S]*?```)/g);
-    
     return parts.map((part, index) => {
       if (part.startsWith('```')) {
-        // Extract content and language
         const content = part.replace(/^```\w*\n?|```$/g, '');
         return (
           <div key={index} className="my-2 bg-black border border-cyber-gray p-2 rounded text-xs font-mono overflow-x-auto text-cyber-green">
@@ -24,8 +55,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
           </div>
         );
       }
-      
-      // Handle bolding **text**
       const boldParts = part.split(/(\*\*.*?\*\*)/g);
       return (
         <span key={index}>
@@ -52,13 +81,36 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
         }`}
       >
         {!isUser && (
-          <div className="flex items-center mb-1 text-xs font-bold text-cyber-green uppercase tracking-wider">
+          <div className="flex items-center justify-between mb-1 text-xs font-bold text-cyber-green uppercase tracking-wider">
             <span className="mr-2">⚡ CyberSentinel</span>
+            {syncStatus && <span className="text-[10px] text-white bg-cyber-gray px-1 rounded animate-pulse">{syncStatus}</span>}
           </div>
         )}
         <div className="whitespace-pre-wrap font-sans">
           {formatText(message.text)}
         </div>
+
+        {/* Integration Buttons */}
+        {!isUser && integrationConfig && (
+          <div className="mt-3 flex gap-2">
+            {ankiCards.length > 0 && (
+              <button 
+                onClick={handleSyncAnki}
+                className="flex items-center gap-1 bg-black border border-cyber-gray hover:border-blue-400 text-[10px] px-2 py-1 rounded text-blue-400 transition-colors"
+              >
+                <span>🗃️ Sync Anki ({ankiCards.length})</span>
+              </button>
+            )}
+            {isNotionNote && (
+              <button 
+                onClick={handleSyncNotion}
+                className="flex items-center gap-1 bg-black border border-cyber-gray hover:border-white text-[10px] px-2 py-1 rounded text-white transition-colors"
+              >
+                <span>📝 Sync Notion</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
