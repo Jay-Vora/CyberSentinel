@@ -1,26 +1,11 @@
-
 import { IntegrationConfig } from "../types";
 
 // CONSTANTS
 const ANKI_URL = 'http://127.0.0.1:8765';
-// Point to the local proxy server we just created
+// CRITICAL: Point to the local proxy server (server.js) running on port 3000
 const NOTION_API_URL = 'http://localhost:3000/v1/pages'; 
 
-// AnkiConnect Payload Types
-interface AnkiParams {
-  note: {
-    deckName: string;
-    modelName: string;
-    fields: {
-      Front: string;
-      Back: string;
-    };
-    tags: string[];
-  };
-}
-
 // Helper to parse the CSV format from the System Prompt
-// Format: "Question";"Answer";"Tag"
 export const parseAnkiCards = (text: string) => {
   const cards: { front: string; back: string; tags: string[] }[] = [];
   const regex = /"(.*?)"\s*;\s*"(.*?)"\s*;\s*"(.*?)"/g;
@@ -49,7 +34,6 @@ const markdownToNotionBlocks = (text: string) => {
         heading_3: { rich_text: [{ type: 'text', text: { content: line.replace('### ', '') } }] }
       });
     } else if (line.startsWith('**') && line.endsWith('**')) {
-      // Bold line treated as strong paragraph
       blocks.push({
         object: 'block',
         type: 'paragraph',
@@ -92,14 +76,13 @@ export const integrationService = {
   async syncToAnki(config: IntegrationConfig, cards: { front: string; back: string; tags: string[] }[]) {
     if (!config.ankiDeckName) throw new Error("Anki Deck Name not configured.");
 
-    // First check if deck exists, if not create it (optional, but good UX)
     try {
       await fetch(ANKI_URL, {
         method: 'POST',
         body: JSON.stringify({ action: "createDeck", version: 6, params: { deck: config.ankiDeckName } })
       });
     } catch (e) {
-      // Ignore create deck error, might already exist or connection failed (handled below)
+      // Ignore create deck error
     }
 
     const results = [];
@@ -125,15 +108,10 @@ export const integrationService = {
           method: 'POST',
           body: JSON.stringify(payload)
         });
-        
         const data = await response.json();
-        
-        if (data.error) {
-           throw new Error(`Anki Error: ${data.error}`);
-        }
+        if (data.error) throw new Error(data.error);
         results.push(data);
       } catch (error: any) {
-        console.error("Anki Sync Error:", error);
         if (error.message && error.message.includes("Failed to fetch")) {
           throw new Error("Connection Refused. Ensure Anki is OPEN and AnkiConnect 'webCorsOriginList' includes '*'.");
         }
@@ -164,7 +142,7 @@ export const integrationService = {
     };
 
     try {
-      // NOTE: We use the local proxy URL to avoid CORS
+      // Connects to local server.js
       const response = await fetch(NOTION_API_URL, {
         method: 'POST',
         headers: {
@@ -181,8 +159,8 @@ export const integrationService = {
       }
       return await response.json();
     } catch (error: any) {
-       if (error.message && error.message.includes("Failed to fetch")) {
-         throw new Error("Connection Error. Ensure the local Proxy Server is running (node server.js).");
+       if (error.message && (error.message.includes("Failed to fetch") || error.message.includes("NetworkError"))) {
+         throw new Error("Backend Proxy Error. Is 'node server.js' running?");
        }
        throw error;
     }
