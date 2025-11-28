@@ -1,5 +1,10 @@
 import { IntegrationConfig } from "../types";
 
+// CONSTANTS
+const ANKI_URL = 'http://127.0.0.1:8765';
+// Switch this to 'https://api.notion.com/v1/pages' if deploying as a pure extension with background script permissions
+const NOTION_API_URL = 'http://localhost:3000/v1/pages'; 
+
 // AnkiConnect Payload Types
 interface AnkiParams {
   note: {
@@ -71,7 +76,7 @@ const markdownToNotionBlocks = (text: string) => {
 export const integrationService = {
   async checkAnkiConnection() {
     try {
-      const response = await fetch('http://127.0.0.1:8765', {
+      const response = await fetch(ANKI_URL, {
         method: 'POST',
         body: JSON.stringify({ action: "version", version: 6 })
       });
@@ -88,7 +93,7 @@ export const integrationService = {
 
     // First check if deck exists, if not create it (optional, but good UX)
     try {
-      await fetch('http://127.0.0.1:8765', {
+      await fetch(ANKI_URL, {
         method: 'POST',
         body: JSON.stringify({ action: "createDeck", version: 6, params: { deck: config.ankiDeckName } })
       });
@@ -115,7 +120,7 @@ export const integrationService = {
       };
 
       try {
-        const response = await fetch('http://127.0.0.1:8765', {
+        const response = await fetch(ANKI_URL, {
           method: 'POST',
           body: JSON.stringify(payload)
         });
@@ -158,7 +163,8 @@ export const integrationService = {
     };
 
     try {
-      const response = await fetch('https://api.notion.com/v1/pages', {
+      // NOTE: We use the local proxy URL to avoid CORS
+      const response = await fetch(NOTION_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${config.notionToken}`,
@@ -174,9 +180,8 @@ export const integrationService = {
       }
       return await response.json();
     } catch (error: any) {
-       // Notion often blocks CORS from browser.
        if (error.message && error.message.includes("Failed to fetch")) {
-         throw new Error("CORS Error: Browser cannot connect directly to Notion. You need a backend proxy.");
+         throw new Error("Connection Error. Ensure the local Proxy Server is running (node server.js).");
        }
        throw error;
     }
